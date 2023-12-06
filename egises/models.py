@@ -100,7 +100,7 @@ class Egises:
         else:
             summary_doc_tuples = []
             summ_pair_tuples = []
-            for document in tqdm(self.documents):
+            for document in self.documents:
                 document.populate_summary_doc_distances(self.measure)
                 summary_doc_tuples.extend([(*k, v) for k, v in document.summary_doc_distances.items()])
                 # print(f"self.summary_doc_tuples: {self.summary_doc_tuples}")

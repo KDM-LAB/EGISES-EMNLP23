@@ -4,7 +4,7 @@ import re
 import nltk
 from nltk.translate import meteor
 from scipy.stats import entropy
-
+import numpy as np
 
 class Measure:
     # to be implemented by subclasses

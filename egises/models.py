@@ -6,7 +6,9 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from egises.distance_measure import Measure
+pd.set_option('mode.chained_assignment', None) # disable warning "A value is trying to be set on a copy of a slice from a DataFrame."
+
+from egises.distance_measure import Measure, JSD, Meteor
 from egises.utils import write_scores_to_csv, divide_with_exception, calculate_proportion
 
 

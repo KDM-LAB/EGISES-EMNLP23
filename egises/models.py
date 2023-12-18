@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-pd.set_option('mode.chained_assignment', None) # disable warning "A value is trying to be set on a copy of a slice from a DataFrame."
+pd.set_option('mode.chained_assignment',
+              None)  # disable warning "A value is trying to be set on a copy of a slice from a DataFrame."
 
 from egises.distance_measure import Measure, JSD, Meteor
 from egises.utils import write_scores_to_csv, divide_with_exception, calculate_proportion
@@ -19,6 +20,8 @@ class Summary:
         self.uid = uid
         self.summary_text = summary_text
 
+    def __repr__(self):
+        return f"Summary(origin_model='{self.origin_model}', doc_id='{self.doc_id}', uid='{self.uid}', summary_text='{self.summary_text}')"
 
 class Document:
     def __init__(self, doc_id, doc_text, doc_summ, user_summaries: Iterable[Summary],
@@ -30,6 +33,9 @@ class Document:
         self.model_summaries = model_summaries
         self.summary_doc_distances = {}
         self.summary_summary_distances = {}
+
+    def __repr__(self):
+        return f"Document(doc_id='{self.doc_id}', doc_summ='{self.doc_summ}', doc_text='{self.doc_text[:50]}...')"
 
     def populate_summary_doc_distances(self, measure: Measure):
         # check if summary_doc_distances in
@@ -43,35 +49,18 @@ class Document:
         # print(f"self.summary_doc_distances: {self.summary_doc_distances}")
 
     def populate_summary_summary_distances(self, measure: Measure):
-        # cache summary tokens
-        summ_tokens = {}
         # calculate user_summary_summary_distances
         for user_summary1, user_summary2 in itertools.permutations(self.user_summaries, 2):
-            if not (user_summary1.origin_model, user_summary1.uid) in summ_tokens:
-                summ_tokens[(user_summary1.origin_model, user_summary1.uid)] = measure._tokenize(
-                    user_summary1.summary_text)
-            if not (user_summary1.origin_model, user_summary2.uid) in summ_tokens:
-                summ_tokens[(user_summary1.origin_model, user_summary2.uid)] = measure._tokenize(
-                    user_summary2.summary_text)
-
             self.summary_summary_distances[
                 (self.doc_id, user_summary1.origin_model, user_summary1.uid, user_summary2.uid)] = measure.distance(
-                summ_tokens[(user_summary1.origin_model, user_summary1.uid)],
-                summ_tokens[(user_summary2.origin_model, user_summary2.uid)])
+                user_summary1.summary_text, user_summary2.summary_text)
 
         # calculate model_summary_summary_distances
         for model_summary1, model_summary2 in itertools.permutations(self.model_summaries, 2):
-            if not (model_summary1.origin_model, model_summary1.uid) in summ_tokens:
-                summ_tokens[(model_summary1.origin_model, model_summary1.uid)] = measure._tokenize(
-                    model_summary1.summary_text)
-            if not (model_summary2.origin_model, model_summary2.uid) in summ_tokens:
-                summ_tokens[(model_summary2.origin_model, model_summary2.uid)] = measure._tokenize(
-                    model_summary2.summary_text)
-
             self.summary_summary_distances[
-                (self.doc_id, model_summary1.origin_model, model_summary1.uid, model_summary2.uid)] = measure.distance(
-                summ_tokens[(model_summary1.origin_model, model_summary1.uid)],
-                summ_tokens[(model_summary2.origin_model, model_summary2.uid)])
+                (self.doc_id, model_summary1.origin_model, model_summary1.uid,
+                 model_summary2.uid)] = measure.distance(
+                model_summary1.summary_text, model_summary2.summary_text)
         # print(f"self.summary_summary_distances: {self.summary_summary_distances}")
 
 

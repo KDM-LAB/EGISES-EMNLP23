@@ -1,10 +1,12 @@
+import concurrent
 import itertools
 import os
+import typing
 from typing import Iterable
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 pd.set_option('mode.chained_assignment',
               None)  # disable warning "A value is trying to be set on a copy of a slice from a DataFrame."
@@ -23,6 +25,7 @@ class Summary:
     def __repr__(self):
         return f"Summary(origin_model='{self.origin_model}', doc_id='{self.doc_id}', uid='{self.uid}', summary_text='{self.summary_text}')"
 
+
 class Document:
     def __init__(self, doc_id, doc_text, doc_summ, user_summaries: Iterable[Summary],
                  model_summaries: Iterable[Summary]):
@@ -32,43 +35,55 @@ class Document:
         self.user_summaries = user_summaries
         self.model_summaries = model_summaries
         self.summary_doc_distances = {}
-        self.summary_summary_distances = {}
+        self.summary_summary_distances = {}  # deviation of user summaries
+        self.summary_user_distances = {}  # accuracy of model summaries
 
     def __repr__(self):
         return f"Document(doc_id='{self.doc_id}', doc_summ='{self.doc_summ}', doc_text='{self.doc_text[:50]}...')"
 
-    def populate_summary_doc_distances(self, measure: Measure):
+    def populate_summary_doc_distances(self, measure: typing.Callable):
         # check if summary_doc_distances in
+
         for user_summary in self.user_summaries:
-            self.summary_doc_distances[(self.doc_id, user_summary.origin_model, user_summary.uid)] = measure.distance(
-                user_summary.summary_text, self.doc_text)
+            self.summary_doc_distances[(self.doc_id, user_summary.origin_model, user_summary.uid)] = measure((
+                user_summary.summary_text, f"{self.doc_summ} {self.doc_text}"))
 
         for model_summary in self.model_summaries:
-            self.summary_doc_distances[(self.doc_id, model_summary.origin_model, model_summary.uid)] = measure.distance(
-                model_summary.summary_text, self.doc_text)
+            self.summary_doc_distances[(self.doc_id, model_summary.origin_model, model_summary.uid)] = measure((
+                model_summary.summary_text, f"{self.doc_summ} {self.doc_text}"))
         # print(f"self.summary_doc_distances: {self.summary_doc_distances}")
 
-    def populate_summary_summary_distances(self, measure: Measure):
+    def populate_summary_summary_distances(self, measure: typing.Callable):
         # calculate user_summary_summary_distances
-        for user_summary1, user_summary2 in itertools.permutations(self.user_summaries, 2):
-            self.summary_summary_distances[
-                (self.doc_id, user_summary1.origin_model, user_summary1.uid, user_summary2.uid)] = measure.distance(
-                user_summary1.summary_text, user_summary2.summary_text)
+        keys = [(self.doc_id, user_summary1.origin_model, user_summary1.uid, user_summary2.uid) for user_summary1, user_summary2 in itertools.permutations(self.user_summaries, 2)]
+        m_keys = [(self.doc_id, model_summary1.origin_model, model_summary1.uid, model_summary2.uid) for
+                  model_summary1, model_summary2 in itertools.permutations(self.model_summaries, 2)]
+        su_keys = [(self.doc_id, model_summary.origin_model, model_summary.uid) for model_summary in
+                   self.model_summaries]
 
-        # calculate model_summary_summary_distances
-        for model_summary1, model_summary2 in itertools.permutations(self.model_summaries, 2):
-            self.summary_summary_distances[
-                (self.doc_id, model_summary1.origin_model, model_summary1.uid,
-                 model_summary2.uid)] = measure.distance(
-                model_summary1.summary_text, model_summary2.summary_text)
-        # print(f"self.summary_summary_distances: {self.summary_summary_distances}")
+        # get user generated summaries into a dictionary
+        user_summary_dict = {(summary.doc_id, summary.uid): summary for summary in self.user_summaries}
+
+        res_args = [(user_summary1.summary_text, user_summary2.summary_text) for user_summary1, user_summary2 in
+                    itertools.permutations(self.user_summaries, 2)]
+        m_res_args = [(model_summary1.summary_text, model_summary2.summary_text) for model_summary1, model_summary2 in
+                      itertools.permutations(self.model_summaries, 2)]
+        su_args = [(model_summary.summary_text, user_summary_dict[model_summary.doc_id, model_summary.uid].summary_text)
+                   for model_summary in self.model_summaries]
+
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            # Map the function to the data, distributing the workload among processes
+            results = list(executor.map(measure, res_args+ m_res_args+su_args))
+
+        self.summary_summary_distances = {k: v for k, v in zip(keys+m_keys, results[:len(keys+m_keys)])}
+        self.summary_user_distances = {k: v for k, v in zip(su_keys, results[len(keys+m_keys):])}
 
 
 class Egises:
-    def __init__(self, model_name, measure: Measure, documents: Iterable[Document], score_directory=""):
+    def __init__(self, model_name, measure: typing.Callable, documents: Iterable[Document], score_directory=""):
         self.model_name = model_name
         if not score_directory:
-            self.score_directory = f"{measure.name}/{model_name}"
+            self.score_directory = f"{measure.__name__}/{model_name}"
         else:
             self.score_directory = score_directory
         if not os.path.exists(f"{self.score_directory}"):
@@ -77,6 +92,7 @@ class Egises:
 
         self.summary_doc_score_path = f"{self.score_directory}/sum_doc_distances.csv"
         self.summ_summ_score_path = f"{self.score_directory}/sum_sum_doc_distances.csv"
+        self.sum_user_score_path = f"{self.score_directory}/sum_user_distances.csv"
 
         self.measure = measure
         self.documents = documents
@@ -89,18 +105,26 @@ class Egises:
         else:
             summary_doc_tuples = []
             summ_pair_tuples = []
-            for document in self.documents:
+            summ_user_tuples = []
+            for document in tqdm(self.documents, desc="Populating Distances", total=3840):
                 document.populate_summary_doc_distances(self.measure)
                 summary_doc_tuples.extend([(*k, v) for k, v in document.summary_doc_distances.items()])
                 # print(f"self.summary_doc_tuples: {self.summary_doc_tuples}")
                 document.populate_summary_summary_distances(self.measure)
                 summ_pair_tuples.extend([(*k, v) for k, v in document.summary_summary_distances.items()])
+                summ_user_tuples.extend([(*k, v) for k, v in document.summary_user_distances.items()])
                 # print(f"self.summ_pair_tuples: {self.summ_pair_tuples}")
-
+            # distance between summaries and documents
             write_scores_to_csv(summary_doc_tuples, fields=("doc_id", "origin_model", "uid", "score"),
                                 filename=self.summary_doc_score_path)
+
+            # distance between summaries
             write_scores_to_csv(summ_pair_tuples, fields=("doc_id", "origin_model", "uid1", "uid2", "score"),
                                 filename=self.summ_summ_score_path)
+
+            # distance between user/gold personalized summaries and model summaries
+            write_scores_to_csv(summ_user_tuples, fields=("doc_id", "origin_model", "uid", "score"),
+                                filename=self.sum_user_score_path)
 
         self.summary_doc_score_df = pd.read_csv(self.summary_doc_score_path)
         self.summ_pair_score_df = pd.read_csv(self.summ_summ_score_path)

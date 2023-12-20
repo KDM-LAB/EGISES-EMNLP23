@@ -43,19 +43,33 @@ class Document:
 
     def populate_summary_doc_distances(self, measure: typing.Callable):
         # check if summary_doc_distances in
+        ukeys = [(self.doc_id, user_summary.origin_model, user_summary.uid) for user_summary in self.user_summaries]
+        uargs = [(user_summary.summary_text, f"{self.doc_summ} {self.doc_text}") for user_summary in
+                    self.user_summaries]
+        mkeys = [(self.doc_id, model_summary.origin_model, model_summary.uid) for model_summary in
+                    self.model_summaries]
+        margs = [(model_summary.summary_text, f"{self.doc_summ} {self.doc_text}") for model_summary in
+                    self.model_summaries]
+        # print(f"uargs: {uargs}")
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            # Map the function to the data, distributing the workload among processes
+            results = list(executor.map(measure, uargs + margs))
+        self.summary_doc_distances = {k: v for k, v in zip(ukeys + mkeys, results)}
 
-        for user_summary in self.user_summaries:
-            self.summary_doc_distances[(self.doc_id, user_summary.origin_model, user_summary.uid)] = measure((
-                user_summary.summary_text, f"{self.doc_summ} {self.doc_text}"))
 
-        for model_summary in self.model_summaries:
-            self.summary_doc_distances[(self.doc_id, model_summary.origin_model, model_summary.uid)] = measure((
-                model_summary.summary_text, f"{self.doc_summ} {self.doc_text}"))
-        # print(f"self.summary_doc_distances: {self.summary_doc_distances}")
+        # for user_summary in self.user_summaries:
+        #     self.summary_doc_distances[(self.doc_id, user_summary.origin_model, user_summary.uid)] = measure((
+        #         user_summary.summary_text, f"{self.doc_summ} {self.doc_text}"))
+        #
+        # for model_summary in self.model_summaries:
+        #     self.summary_doc_distances[(self.doc_id, model_summary.origin_model, model_summary.uid)] = measure((
+        #         model_summary.summary_text, f"{self.doc_summ} {self.doc_text}"))
+        # # print(f"self.summary_doc_distances: {self.summary_doc_distances}")
 
     def populate_summary_summary_distances(self, measure: typing.Callable):
         # calculate user_summary_summary_distances
-        keys = [(self.doc_id, user_summary1.origin_model, user_summary1.uid, user_summary2.uid) for user_summary1, user_summary2 in itertools.permutations(self.user_summaries, 2)]
+        keys = [(self.doc_id, user_summary1.origin_model, user_summary1.uid, user_summary2.uid) for
+                user_summary1, user_summary2 in itertools.permutations(self.user_summaries, 2)]
         m_keys = [(self.doc_id, model_summary1.origin_model, model_summary1.uid, model_summary2.uid) for
                   model_summary1, model_summary2 in itertools.permutations(self.model_summaries, 2)]
         su_keys = [(self.doc_id, model_summary.origin_model, model_summary.uid) for model_summary in
@@ -73,10 +87,10 @@ class Document:
 
         with concurrent.futures.ProcessPoolExecutor() as executor:
             # Map the function to the data, distributing the workload among processes
-            results = list(executor.map(measure, res_args+ m_res_args+su_args))
+            results = list(executor.map(measure, res_args + m_res_args + su_args))
 
-        self.summary_summary_distances = {k: v for k, v in zip(keys+m_keys, results[:len(keys+m_keys)])}
-        self.summary_user_distances = {k: v for k, v in zip(su_keys, results[len(keys+m_keys):])}
+        self.summary_summary_distances = {k: v for k, v in zip(keys + m_keys, results[:len(keys + m_keys)])}
+        self.summary_user_distances = {k: v for k, v in zip(su_keys, results[len(keys + m_keys):])}
 
 
 class Egises:
@@ -89,6 +103,9 @@ class Egises:
         if not os.path.exists(f"{self.score_directory}"):
             # create directory
             os.makedirs(f"{self.score_directory}")
+            print(f"created directory: {self.score_directory}")
+        else:
+            print(f"directory already exists: {self.score_directory}")
 
         self.summary_doc_score_path = f"{self.score_directory}/sum_doc_distances.csv"
         self.summ_summ_score_path = f"{self.score_directory}/sum_sum_doc_distances.csv"
@@ -147,8 +164,9 @@ class Egises:
 
         # step 3: calculate softmax of pair_score_weight grouped by doc_id, uid1
         # softmax(w(u_ij)) = exp(w(u_ij))/sum(exp(w(u_il))) where l is all users who summarized doc i
-        upair_scores_df["pair_score_weight_exp"] = upair_scores_df.apply(lambda x: np.exp(x["pair_score_weight"]),
-                                                                         axis=1)
+        upair_scores_df["pair_score_weight_exp"] = upair_scores_df.apply(
+            lambda x: np.exp(x["pair_score_weight"]),
+            axis=1)
         upair_scores_df["pair_score_weight_exp_softmax"] = upair_scores_df.groupby(["doc_id", "uid1"])[
             "pair_score_weight_exp"].transform(lambda x: x / sum(x))
 
@@ -165,6 +183,12 @@ class Egises:
         model_Y_df = self.get_user_model_X_scores(model_name=self.model_name)
         # sample sample_percentage% of model_Y_df
         model_Y_df = model_Y_df.sample(frac=sample_percentage / 100)
+        accuracy_df = pd.read_csv(self.sum_user_score_path)
+
+        accuracy_dict = {(k[0], k[1]): v["score"] for k, v in accuracy_df.set_index(["doc_id", "uid"]).to_dict(
+            orient="index").items()}
+
+        # print(model_Y_df.head(2))
         user_X_df = user_X_df.set_index(["doc_id", "uid1", "uid2"])
         user_X_score_map = user_X_df.to_dict(orient="index")
 
@@ -175,5 +199,15 @@ class Egises:
         # calculate mean of proportion column
         model_Y_df["mean_proportion"] = model_Y_df.groupby(["doc_id", "uid1"])["proportion"].transform(
             lambda x: np.mean(x))
+
+        # calculate mean of accuracy of model-user pairs
+        doc_pairs = list(model_Y_df.groupby(["doc_id", "uid1"]).groups.keys())
+        doc_pairs.extend(model_Y_df.groupby(["doc_id", "uid2"]).groups.keys())
+        doc_pairs = list(set(doc_pairs))
+        # print(doc_pairs[:2])
+        # print(accuracy_dict.values())
+        msum_accuracies = [accuracy_dict[pair] for pair in doc_pairs]
+        mean_msum_accuracy = np.mean(msum_accuracies)
+
         # find mean of mean_proportion column
-        return round(1 - model_Y_df['mean_proportion'].mean(), 4)
+        return round(1 - model_Y_df['mean_proportion'].mean(), 4), round(mean_msum_accuracy, 4)

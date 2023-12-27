@@ -13,3 +13,8 @@ git clone git@github.com:KDM-LAB/egises.git
 ```
 pip install -e .
 ```
+
+#### Via git repo
+```
+pip install git+ssh://git@github.com/KDM-LAB/egises.git
+```

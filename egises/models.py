@@ -123,20 +123,32 @@ class Egises:
         self.summ_pair_score_df = None
 
     def populate_distances(self):
+        last_seen, last_doc_processed = False, None
         if os.path.exists(self.summary_doc_score_path) and os.path.exists(self.summ_summ_score_path):
-            pass
-        else:
+            summary_doc_score_df = pd.read_csv(self.summary_doc_score_path)
+            # find last doc_id in summary_doc_distances
+            last_doc_processed = summary_doc_score_df.iloc[-1]["doc_id"]
+        pbar = tqdm(total=3840, desc="Populating Distances")
+        for document in self.documents:
+
+            # find last doc_id in summary_doc_distances
+            if not last_seen and last_doc_processed and document.doc_id != last_doc_processed:
+                pbar.update(1)
+                continue
+            elif last_doc_processed and document.doc_id == last_doc_processed:
+                pbar.update(1)
+                last_seen = True
+                continue
             summary_doc_tuples = []
             summ_pair_tuples = []
             summ_user_tuples = []
-            for document in tqdm(self.documents, desc="Populating Distances", total=3840):
-                document.populate_summary_doc_distances(self.measure, max_workers=self.max_workers)
-                summary_doc_tuples.extend([(*k, v) for k, v in document.summary_doc_distances.items()])
-                # print(f"self.summary_doc_tuples: {self.summary_doc_tuples}")
-                document.populate_summary_summary_distances(self.measure, max_workers=self.max_workers)
-                summ_pair_tuples.extend([(*k, v) for k, v in document.summary_summary_distances.items()])
-                summ_user_tuples.extend([(*k, v) for k, v in document.summary_user_distances.items()])
-                # print(f"self.summ_pair_tuples: {self.summ_pair_tuples}")
+            document.populate_summary_doc_distances(self.measure, max_workers=self.max_workers)
+            summary_doc_tuples.extend([(*k, v) for k, v in document.summary_doc_distances.items()])
+            # print(f"self.summary_doc_tuples: {self.summary_doc_tuples}")
+            document.populate_summary_summary_distances(self.measure, max_workers=self.max_workers)
+            summ_pair_tuples.extend([(*k, v) for k, v in document.summary_summary_distances.items()])
+            summ_user_tuples.extend([(*k, v) for k, v in document.summary_user_distances.items()])
+            # print(f"self.summ_pair_tuples: {self.summ_pair_tuples}")
             # distance between summaries and documents
             write_scores_to_csv(summary_doc_tuples, fields=("doc_id", "origin_model", "uid", "score"),
                                 filename=self.summary_doc_score_path)
@@ -148,6 +160,7 @@ class Egises:
             # distance between user/gold personalized summaries and model summaries
             write_scores_to_csv(summ_user_tuples, fields=("doc_id", "origin_model", "uid", "score"),
                                 filename=self.sum_user_score_path)
+            pbar.update(1)
 
         self.summary_doc_score_df = pd.read_csv(self.summary_doc_score_path)
         self.summ_pair_score_df = pd.read_csv(self.summ_summ_score_path)

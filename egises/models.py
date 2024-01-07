@@ -41,21 +41,23 @@ class Document:
     def __repr__(self):
         return f"Document(doc_id='{self.doc_id}', doc_summ='{self.doc_summ}', doc_text='{self.doc_text[:50]}...')"
 
-    def populate_summary_doc_distances(self, measure: typing.Callable):
+    def populate_summary_doc_distances(self, measure: typing.Callable, max_workers=1):
         # check if summary_doc_distances in
         ukeys = [(self.doc_id, user_summary.origin_model, user_summary.uid) for user_summary in self.user_summaries]
         uargs = [(user_summary.summary_text, f"{self.doc_summ} {self.doc_text}") for user_summary in
-                    self.user_summaries]
+                 self.user_summaries]
         mkeys = [(self.doc_id, model_summary.origin_model, model_summary.uid) for model_summary in
-                    self.model_summaries]
+                 self.model_summaries]
         margs = [(model_summary.summary_text, f"{self.doc_summ} {self.doc_text}") for model_summary in
-                    self.model_summaries]
+                 self.model_summaries]
         # print(f"uargs: {uargs}")
-        with concurrent.futures.ProcessPoolExecutor() as executor:
-            # Map the function to the data, distributing the workload among processes
-            results = list(executor.map(measure, uargs + margs))
+        if max_workers > 1:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+                # Map the function to the data, distributing the workload among processes
+                results = list(executor.map(measure, uargs + margs))
+        else:
+            results = list(map(measure, uargs + margs))
         self.summary_doc_distances = {k: v for k, v in zip(ukeys + mkeys, results)}
-
 
         # for user_summary in self.user_summaries:
         #     self.summary_doc_distances[(self.doc_id, user_summary.origin_model, user_summary.uid)] = measure((
@@ -66,7 +68,7 @@ class Document:
         #         model_summary.summary_text, f"{self.doc_summ} {self.doc_text}"))
         # # print(f"self.summary_doc_distances: {self.summary_doc_distances}")
 
-    def populate_summary_summary_distances(self, measure: typing.Callable):
+    def populate_summary_summary_distances(self, measure: typing.Callable, max_workers=1):
         # calculate user_summary_summary_distances
         keys = [(self.doc_id, user_summary1.origin_model, user_summary1.uid, user_summary2.uid) for
                 user_summary1, user_summary2 in itertools.permutations(self.user_summaries, 2)]
@@ -84,17 +86,20 @@ class Document:
                       itertools.permutations(self.model_summaries, 2)]
         su_args = [(model_summary.summary_text, user_summary_dict[model_summary.doc_id, model_summary.uid].summary_text)
                    for model_summary in self.model_summaries]
-
-        with concurrent.futures.ProcessPoolExecutor() as executor:
-            # Map the function to the data, distributing the workload among processes
-            results = list(executor.map(measure, res_args + m_res_args + su_args))
+        if max_workers > 1:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+                # Map the function to the data, distributing the workload among processes
+                results = list(executor.map(measure, res_args + m_res_args + su_args))
+        else:
+            results = list(map(measure, res_args + m_res_args + su_args))
 
         self.summary_summary_distances = {k: v for k, v in zip(keys + m_keys, results[:len(keys + m_keys)])}
         self.summary_user_distances = {k: v for k, v in zip(su_keys, results[len(keys + m_keys):])}
 
 
 class Egises:
-    def __init__(self, model_name, measure: typing.Callable, documents: Iterable[Document], score_directory=""):
+    def __init__(self, model_name, measure: typing.Callable, documents: Iterable[Document], score_directory="",
+                 max_workers=1):
         self.model_name = model_name
         if not score_directory:
             self.score_directory = f"{measure.__name__}/{model_name}"
@@ -107,6 +112,7 @@ class Egises:
         else:
             print(f"directory already exists: {self.score_directory}")
 
+        self.max_workers = max_workers
         self.summary_doc_score_path = f"{self.score_directory}/sum_doc_distances.csv"
         self.summ_summ_score_path = f"{self.score_directory}/sum_sum_doc_distances.csv"
         self.sum_user_score_path = f"{self.score_directory}/sum_user_distances.csv"
@@ -117,20 +123,32 @@ class Egises:
         self.summ_pair_score_df = None
 
     def populate_distances(self):
+        last_seen, last_doc_processed = False, None
         if os.path.exists(self.summary_doc_score_path) and os.path.exists(self.summ_summ_score_path):
-            pass
-        else:
+            summary_doc_score_df = pd.read_csv(self.summary_doc_score_path)
+            # find last doc_id in summary_doc_distances
+            last_doc_processed = summary_doc_score_df.iloc[-1]["doc_id"]
+        pbar = tqdm(total=3840, desc="Populating Distances")
+        for document in self.documents:
+
+            # find last doc_id in summary_doc_distances
+            if not last_seen and last_doc_processed and document.doc_id != last_doc_processed:
+                pbar.update(1)
+                continue
+            elif last_doc_processed and document.doc_id == last_doc_processed:
+                pbar.update(1)
+                last_seen = True
+                continue
             summary_doc_tuples = []
             summ_pair_tuples = []
             summ_user_tuples = []
-            for document in tqdm(self.documents, desc="Populating Distances", total=3840):
-                document.populate_summary_doc_distances(self.measure)
-                summary_doc_tuples.extend([(*k, v) for k, v in document.summary_doc_distances.items()])
-                # print(f"self.summary_doc_tuples: {self.summary_doc_tuples}")
-                document.populate_summary_summary_distances(self.measure)
-                summ_pair_tuples.extend([(*k, v) for k, v in document.summary_summary_distances.items()])
-                summ_user_tuples.extend([(*k, v) for k, v in document.summary_user_distances.items()])
-                # print(f"self.summ_pair_tuples: {self.summ_pair_tuples}")
+            document.populate_summary_doc_distances(self.measure, max_workers=self.max_workers)
+            summary_doc_tuples.extend([(*k, v) for k, v in document.summary_doc_distances.items()])
+            # print(f"self.summary_doc_tuples: {self.summary_doc_tuples}")
+            document.populate_summary_summary_distances(self.measure, max_workers=self.max_workers)
+            summ_pair_tuples.extend([(*k, v) for k, v in document.summary_summary_distances.items()])
+            summ_user_tuples.extend([(*k, v) for k, v in document.summary_user_distances.items()])
+            # print(f"self.summ_pair_tuples: {self.summ_pair_tuples}")
             # distance between summaries and documents
             write_scores_to_csv(summary_doc_tuples, fields=("doc_id", "origin_model", "uid", "score"),
                                 filename=self.summary_doc_score_path)
@@ -142,6 +160,7 @@ class Egises:
             # distance between user/gold personalized summaries and model summaries
             write_scores_to_csv(summ_user_tuples, fields=("doc_id", "origin_model", "uid", "score"),
                                 filename=self.sum_user_score_path)
+            pbar.update(1)
 
         self.summary_doc_score_df = pd.read_csv(self.summary_doc_score_path)
         self.summ_pair_score_df = pd.read_csv(self.summ_summ_score_path)
@@ -178,7 +197,7 @@ class Egises:
 
     def get_egises_score(self, sample_percentage=100):
         # print(f"populating distances")
-        self.populate_distances()
+        self.populate_distances(max_workers=self.max_workers)
         user_X_df = self.get_user_model_X_scores(model_name="user")
         model_Y_df = self.get_user_model_X_scores(model_name=self.model_name)
         # sample sample_percentage% of model_Y_df

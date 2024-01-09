@@ -202,7 +202,7 @@ class Egises:
         user_X_df = self.get_user_model_X_scores(model_name="user")
         model_Y_df = self.get_user_model_X_scores(model_name=self.model_name)
         # sample sample_percentage% of model_Y_df
-        # model_Y_df = model_Y_df.sample(frac=sample_percentage / 100)
+        model_Y_df = model_Y_df.sample(frac=sample_percentage / 100)
         accuracy_df = pd.read_csv(self.sum_user_score_path)
 
         accuracy_dict = {(k[0], k[1]): v["score"] for k, v in accuracy_df.set_index(["doc_id", "uid"]).to_dict(
@@ -237,17 +237,13 @@ class Egises:
         # temporary df to calculate docwise_mean_proportion
         final_df = model_Y_df[["doc_id", "docwise_mean_proportion"]].drop_duplicates()
 
-        # sample percentage of final_df
-        final_df = final_df.sample(frac=sample_percentage / 100)
-        sampled_doc_ids = final_df["doc_id"].tolist()
-
         # calculate mean of accuracy of model-user pairs
         doc_pairs = list(model_Y_df.groupby(["doc_id", "uid1"]).groups.keys())
         doc_pairs.extend(model_Y_df.groupby(["doc_id", "uid2"]).groups.keys())
         doc_pairs = list(set(doc_pairs))
         # print(doc_pairs[:2])
         # print(accuracy_dict.values())
-        msum_accuracies = [accuracy_dict[pair] for pair in doc_pairs if pair[0] in sampled_doc_ids]
+        msum_accuracies = [accuracy_dict[pair] for pair in doc_pairs]
         mean_msum_accuracy = np.mean(msum_accuracies)
 
         # find mean of mean_proportion column

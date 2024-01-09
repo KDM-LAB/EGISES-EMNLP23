@@ -99,7 +99,7 @@ class Document:
 
 class Egises:
     def __init__(self, model_name, measure: typing.Callable, documents: Iterable[Document], score_directory="",
-                 max_workers=1):
+                 max_workers=1, debug_flag=False):
         self.model_name = model_name
         if not score_directory:
             self.score_directory = f"{measure.__name__}/{model_name}"
@@ -113,6 +113,7 @@ class Egises:
             print(f"directory already exists: {self.score_directory}")
 
         self.max_workers = max_workers
+        self.debug_flag = debug_flag
         self.summary_doc_score_path = f"{self.score_directory}/sum_doc_distances.csv"
         self.summ_summ_score_path = f"{self.score_directory}/sum_sum_doc_distances.csv"
         self.sum_user_score_path = f"{self.score_directory}/sum_user_distances.csv"
@@ -128,9 +129,9 @@ class Egises:
             summary_doc_score_df = pd.read_csv(self.summary_doc_score_path)
             # find last doc_id in summary_doc_distances
             last_doc_processed = summary_doc_score_df.iloc[-1]["doc_id"]
+        # populate document scores from where left off
         pbar = tqdm(total=3840, desc="Populating Distances")
         for document in self.documents:
-
             # find last doc_id in summary_doc_distances
             if not last_seen and last_doc_processed and document.doc_id != last_doc_processed:
                 pbar.update(1)
@@ -162,10 +163,25 @@ class Egises:
                                 filename=self.sum_user_score_path)
             pbar.update(1)
 
+        pbar.close()
+
+        # load scores from csv
         self.summary_doc_score_df = pd.read_csv(self.summary_doc_score_path)
         self.summ_pair_score_df = pd.read_csv(self.summ_summ_score_path)
-        # print(f"len(self.summary_doc_tuples): {len(self.summary_doc_tuples)}")
-        # print(f"len(self.summ_pair_tuples): {len(self.summ_pair_tuples)}")
+        self.accuracy_df = pd.read_csv(self.sum_user_score_path)
+
+        # calculate X,Y scores for all document,u1,u2  pairs
+        self.user_X_df = self.get_user_model_X_scores(model_name="user")
+        self.model_Y_df = self.get_user_model_X_scores(model_name=self.model_name)
+
+        # create map of user_X_df[(doc_id,uid1,uid2)] to user_X_df["final_score"]
+        user_X_df = self.user_X_df.set_index(["doc_id", "uid1", "uid2"])
+        user_X_score_map = user_X_df.to_dict(orient="index")
+
+        # calculate min/max on model_Y_df["final_score"] and user_X_score_map[(doc_id,uid1,uid2))]
+        self.model_Y_df["proportion"] = self.model_Y_df.apply(
+            lambda x: calculate_proportion(x.final_score, user_X_score_map[
+                (x["doc_id"], x["uid1"], x["uid2"])]["final_score"]), axis=1)
 
     def get_user_model_X_scores(self, model_name):
         usum_scores_df = self.summary_doc_score_df[self.summary_doc_score_df["origin_model"] == model_name]
@@ -196,28 +212,27 @@ class Egises:
         return final_df
 
     def get_egises_score(self, sample_percentage=100):
-        # print(f"populating distances")
-        self.populate_distances(max_workers=self.max_workers)
-        user_X_df = self.get_user_model_X_scores(model_name="user")
-        model_Y_df = self.get_user_model_X_scores(model_name=self.model_name)
-        # sample sample_percentage% of model_Y_df
-        model_Y_df = model_Y_df.sample(frac=sample_percentage / 100)
-        accuracy_df = pd.read_csv(self.sum_user_score_path)
-
-        accuracy_dict = {(k[0], k[1]): v["score"] for k, v in accuracy_df.set_index(["doc_id", "uid"]).to_dict(
+        # sample doc_id,u1, u2 pairs from model_Y_df
+        model_Y_df = self.model_Y_df.sample(frac=sample_percentage / 100)
+        accuracy_dict = {(k[0], k[1]): v["score"] for k, v in self.accuracy_df.set_index(["doc_id", "uid"]).to_dict(
             orient="index").items()}
 
-        # print(model_Y_df.head(2))
-        user_X_df = user_X_df.set_index(["doc_id", "uid1", "uid2"])
-        user_X_score_map = user_X_df.to_dict(orient="index")
-
-        # calculate min/max on model_Y_df["final_score"] and user_X_score_map[(doc_id,uid1,uid2))]
-        model_Y_df["proportion"] = model_Y_df.apply(lambda x: calculate_proportion(x.final_score, user_X_score_map[
-            (x["doc_id"], x["uid1"], x["uid2"])]["final_score"]), axis=1)
-
-        # calculate mean of proportion column
-        model_Y_df["mean_proportion"] = model_Y_df.groupby(["doc_id", "uid1"])["proportion"].transform(
+        # find mean of model_Y_df["final_score"] grouped by doc_id,uid1
+        model_Y_df["doc_userwise_proportional_divergence"] = model_Y_df.groupby(["doc_id", "uid1"])[
+            "proportion"].transform(
             lambda x: np.mean(x))
+
+        # find mean of model_Y_df["doc_userwise_proportional_divergence"] grouped by doc_id
+        model_Y_df["docwise_mean_proportion"] = model_Y_df.groupby(["doc_id"])[
+            "doc_userwise_proportional_divergence"].transform(
+            lambda x: np.mean(x))
+
+        if self.debug_flag:
+            # save model_Y_df to csv
+            model_Y_df.to_csv(f"{self.score_directory}/model_Y_df.csv", index=False)
+
+        # temporary df to calculate docwise_mean_proportion
+        final_df = model_Y_df[["doc_id", "docwise_mean_proportion"]].drop_duplicates()
 
         # calculate mean of accuracy of model-user pairs
         doc_pairs = list(model_Y_df.groupby(["doc_id", "uid1"]).groups.keys())
@@ -229,4 +244,4 @@ class Egises:
         mean_msum_accuracy = np.mean(msum_accuracies)
 
         # find mean of mean_proportion column
-        return round(1 - model_Y_df['mean_proportion'].mean(), 4), round(mean_msum_accuracy, 4)
+        return round(1 - final_df['docwise_mean_proportion'].mean(), 4), round(mean_msum_accuracy, 4)

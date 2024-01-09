@@ -163,9 +163,6 @@ class Egises:
                                 filename=self.sum_user_score_path)
             pbar.update(1)
 
-        pbar.close()
-
-        # load scores from csv
         self.summary_doc_score_df = pd.read_csv(self.summary_doc_score_path)
         self.summ_pair_score_df = pd.read_csv(self.summ_summ_score_path)
         self.accuracy_df = pd.read_csv(self.sum_user_score_path)
@@ -245,3 +242,31 @@ class Egises:
 
         # find mean of mean_proportion column
         return round(1 - final_df['docwise_mean_proportion'].mean(), 4), round(mean_msum_accuracy, 4)
+
+def get_egises_pp_score(self, sample_percentage=100, eps=0.0000001, beta=1.0):
+        self.populate_distances()
+
+        accuracy_df = pd.read_csv(self.sum_user_score_path)
+
+        # calculation of d_mean
+        summ_user_mean_dict = accuracy_df.groupby(["doc_id","origin_model"]).apply(lambda x:np.mean(x["score"])).to_dict()
+
+        # calculation of d_min
+        summ_user_min_dict = accuracy_df.groupby(["doc_id","origin_model"]).apply(lambda x: min(x["score"])).to_dict()
+
+        accuracy_df["d_min"] = accuracy_df.apply(lambda x: summ_user_min_dict[(x["doc_id"], x["origin_model"])],  axis=1)
+        accuracy_df["d_mean"] = accuracy_df.apply(lambda x: summ_user_mean_dict[(x["doc_id"], x["origin_model"])],  axis=1)
+
+        def sigmoid(x):
+            return 1 / (1 + np.exp(-x))
+        
+        accuracy_df["pterm1"] = accuracy_df.apply(lambda x: ((x["score"]-x["d_min"])/((x["d_mean"]-x["d_min"])+eps)),  axis=1)
+        accuracy_df["pterm2"] = accuracy_df.apply(lambda x: sigmoid((x["d_min"]-0)/((1-x["d_min"])+eps)),  axis=1)
+        accuracy_df["p"] = accuracy_df.apply(lambda x: x["pterm1"] + x["pterm2"],  axis=1)
+        accuracy_df["p_"] = accuracy_df.apply(lambda x: 1-(1/(1+(10**3* np.exp(-10**beta* (x["p"]-0))))),  axis=1)
+        
+        # debug log into csv
+        # accuracy_df.to_csv(f'scores/{self.model_name}/egises_pp_score.csv')
+
+        eg_score, accuracy_score = self.get_egises_score()
+        return accuracy_df["p_"].mean()*eg_score, accuracy_score

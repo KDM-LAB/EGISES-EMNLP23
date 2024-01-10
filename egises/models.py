@@ -12,7 +12,7 @@ pd.set_option('mode.chained_assignment',
               None)  # disable warning "A value is trying to be set on a copy of a slice from a DataFrame."
 
 from egises.distance_measure import Measure, JSD, Meteor
-from egises.utils import write_scores_to_csv, divide_with_exception, calculate_proportion
+from egises.utils import sigmoid, write_scores_to_csv, divide_with_exception, calculate_proportion
 
 
 class Summary:
@@ -256,9 +256,6 @@ def get_egises_pp_score(self, sample_percentage=100, eps=0.0000001, beta=1.0):
 
         accuracy_df["d_min"] = accuracy_df.apply(lambda x: summ_user_min_dict[(x["doc_id"], x["origin_model"])],  axis=1)
         accuracy_df["d_mean"] = accuracy_df.apply(lambda x: summ_user_mean_dict[(x["doc_id"], x["origin_model"])],  axis=1)
-
-        def sigmoid(x):
-            return 1 / (1 + np.exp(-x))
         
         accuracy_df["pterm1"] = accuracy_df.apply(lambda x: ((x["score"]-x["d_min"])/((x["d_mean"]-x["d_min"])+eps)),  axis=1)
         accuracy_df["pterm2"] = accuracy_df.apply(lambda x: sigmoid((x["d_min"]-0)/((1-x["d_min"])+eps)),  axis=1)

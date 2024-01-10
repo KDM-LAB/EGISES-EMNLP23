@@ -54,3 +54,7 @@ def write_scores_to_csv(rows, fields=None, filename="scores.csv"):
                 write = csv.writer(f)
             write.writerow(fields)
             write.writerows(rows)
+
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))

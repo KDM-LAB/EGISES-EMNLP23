@@ -163,9 +163,6 @@ class Egises:
                                 filename=self.sum_user_score_path)
             pbar.update(1)
 
-        pbar.close()
-
-        # load scores from csv
         self.summary_doc_score_df = pd.read_csv(self.summary_doc_score_path)
         self.summ_pair_score_df = pd.read_csv(self.summ_summ_score_path)
         self.accuracy_df = pd.read_csv(self.sum_user_score_path)
@@ -244,7 +241,7 @@ class Egises:
         mean_msum_accuracy = np.mean(msum_accuracies)
 
         # find mean of mean_proportion column
-        return round(1 - model_Y_df['mean_proportion'].mean(), 4), round(mean_msum_accuracy, 4)
+        return round(1 - final_df['docwise_mean_proportion'].mean(), 4), round(mean_msum_accuracy, 4)
 
 def get_egises_pp_score(self, sample_percentage=100, eps=0.0000001, beta=1.0):
         self.populate_distances()

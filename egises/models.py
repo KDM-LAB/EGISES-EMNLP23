@@ -12,7 +12,20 @@ pd.set_option('mode.chained_assignment',
               None)  # disable warning "A value is trying to be set on a copy of a slice from a DataFrame."
 
 from egises.distance_measure import Measure, JSD, Meteor
-from egises.utils import sigmoid, write_scores_to_csv, divide_with_exception, calculate_proportion
+from egises.utils import custom_sigmoid, write_scores_to_csv, divide_with_exception, calculate_proportion
+
+from dataclasses import dataclass
+
+
+@dataclass
+class PersevalParams:
+    ADP_alpha: float = 4.0
+    ADP_beta: float = 1.0
+    ACP_alpha: float = 4.0
+    ACP_beta: float = 1.0
+    EDP_alpha: float = 3.0
+    EDP_beta: float = 1.0
+    epsilon: float = 0.0000001
 
 
 class Summary:
@@ -243,27 +256,83 @@ class Egises:
         # find mean of mean_proportion column
         return round(1 - final_df['docwise_mean_proportion'].mean(), 4), round(mean_msum_accuracy, 4)
 
-def get_egises_pp_score(self, sample_percentage=100, eps=0.0000001, beta=1.0):
-        # self.populate_distances()
-
-        # accuracy_df = pd.read_csv(self.sum_user_score_path)
-
+    def calculate_edp(self, accuracy_df, perseval_params: PersevalParams) -> dict:
         # calculation of d_mean
-        summ_user_mean_dict = self.accuracy_df.groupby(["doc_id","origin_model"]).apply(lambda x:np.mean(x["score"])).to_dict()
+        summ_user_mean_dict = accuracy_df.groupby(["doc_id", "origin_model"]).apply(
+            lambda x: np.mean(x["score"])).to_dict()
 
         # calculation of d_min
-        summ_user_min_dict = self.accuracy_df.groupby(["doc_id","origin_model"]).apply(lambda x: min(x["score"])).to_dict()
+        summ_user_min_dict = accuracy_df.groupby(["doc_id", "origin_model"]).apply(lambda x: min(x["score"])).to_dict()
 
-        self.accuracy_df["d_min"] = self.accuracy_df.apply(lambda x: summ_user_min_dict[(x["doc_id"], x["origin_model"])],  axis=1)
-        self.accuracy_df["d_mean"] = self.accuracy_df.apply(lambda x: summ_user_mean_dict[(x["doc_id"], x["origin_model"])],  axis=1)
-        
-        self.accuracy_df["pterm1"] = self.accuracy_df.apply(lambda x: ((x["score"]-x["d_min"])/((x["d_mean"]-x["d_min"])+eps)),  axis=1)
-        self.accuracy_df["pterm2"] = self.accuracy_df.apply(lambda x: sigmoid((x["d_min"]-0)/((1-x["d_min"])+eps)),  axis=1)
-        self.accuracy_df["p"] = self.accuracy_df.apply(lambda x: x["pterm1"] + x["pterm2"],  axis=1)
-        self.accuracy_df["p_"] = self.accuracy_df.apply(lambda x: 1-(1/(1+(10**3* np.exp(-10**beta* (x["p"]-0))))),  axis=1)
-        
-        # debug log into csv
-        # accuracy_df.to_csv(f'scores/{self.model_name}/egises_pp_score.csv')
+        accuracy_df["d_min"] = accuracy_df.apply(lambda x: summ_user_min_dict[(x["doc_id"], x["origin_model"])],
+                                                 axis=1)
+        accuracy_df["d_mean"] = accuracy_df.apply(lambda x: summ_user_mean_dict[(x["doc_id"], x["origin_model"])],
+                                                  axis=1)
 
-        eg_score, accuracy_score = self.get_egises_score()
-        return self.accuracy_df["p_"].mean()*eg_score, accuracy_score
+        # calculate Accuracy Inconsistency Penalty(ACP)
+        accuracy_df["pterm1"] = accuracy_df.apply(
+            lambda x: ((x["score"] - x["d_min"]) / ((x["d_mean"] - x["d_min"]) + perseval_params.epsilon)), axis=1)
+        # applied sigmoid to pterm1
+        accuracy_df["ACP"] = accuracy_df.apply(
+            lambda x: custom_sigmoid(x["pterm1"], alpha=perseval_params.ACP_alpha, beta=perseval_params.ACP_beta),
+            axis=1)
+
+        # calculate Accuracy Drop Penalty(ADP)
+        accuracy_df["pterm2"] = accuracy_df.apply(
+            lambda x: (x["d_min"] - 0) / (1 - x["d_min"] + perseval_params.epsilon), axis=1)
+        accuracy_df["ADP"] = accuracy_df.apply(
+            lambda x: custom_sigmoid(x["pterm2"], alpha=perseval_params.ADP_alpha, beta=perseval_params.ADP_beta),
+            axis=1)
+
+        # calculate Document Generalization Penalty(DGP)
+        accuracy_df["DGP"] = accuracy_df.apply(lambda x: (x["ACP"] + x["ADP"]), axis=1)
+
+        accuracy_df["EDP"] = accuracy_df.apply(
+            lambda x: (1 - custom_sigmoid(x["DGP"], alpha=perseval_params.EDP_alpha, beta=perseval_params.EDP_beta)),
+            axis=1)
+
+        doc_user_edp_dict = accuracy_df.groupby(["doc_id", "uid"]).apply(lambda x: np.mean(x["EDP"])).to_dict()
+        return doc_user_edp_dict
+
+    def get_perseval_score(self, sample_percentage=100, perseval_params: PersevalParams = None):
+        if not perseval_params:
+            perseval_params = PersevalParams()
+        # calculate_degress
+        model_Y_df = self.model_Y_df.sample(frac=sample_percentage / 100)
+
+        # find mean of model_Y_df["final_score"] grouped by doc_id,uid1
+        model_Y_df["doc_userwise_proportional_divergence"] = model_Y_df.groupby(["doc_id", "uid1"])[
+            "proportion"].transform(
+            lambda x: np.mean(x))
+
+        doc_user_degress_df = model_Y_df[["doc_id", "uid1", "doc_userwise_proportional_divergence"]].drop_duplicates()
+        # get doc_id, uid1 pairs from doc_user_degress_df
+        degress_pairs = list(doc_user_degress_df.groupby(["doc_id", "uid1"]).groups.keys())
+
+        # pick records from accuracy_df where doc_id, uid in doc_user_degress_df
+        accuracy_df = self.accuracy_df[
+            self.accuracy_df.apply(lambda x: (x["doc_id"], x["uid"]) in degress_pairs, axis=1)]
+        # calculate_edp based on sampled model_Y_df
+        doc_user_edp_dict = self.calculate_edp(accuracy_df, perseval_params)
+
+        try:
+            assert len(doc_user_edp_dict) == len(doc_user_degress_df)
+        except AssertionError as err:
+            print(f"len(doc_user_edp_dict): {len(doc_user_edp_dict)}")
+            print(f"len(doc_user_degress_df): {len(doc_user_degress_df)}")
+            raise Exception("length of doc_user_edp_dict and doc_user_degress_df should be equal")
+
+        doc_user_degress_df["edp"] = doc_user_degress_df.apply(
+            lambda x: doc_user_edp_dict[(x["doc_id"], x["uid1"])], axis=1)
+        doc_user_degress_df["perseval"] = doc_user_degress_df.apply(
+            lambda x: x["doc_userwise_proportional_divergence"] * x["edp"], axis=1)
+        doc_user_degress_df["docwise_perseval_proportion"] = doc_user_degress_df.groupby(["doc_id"])[
+            "perseval"].transform(
+            lambda x: np.mean(x))
+        # for debug purpose
+        doc_user_degress_df.to_csv(f"{self.score_directory}/doc_degress_perseval_df.csv", index=False)
+
+        final_doc_df = doc_user_degress_df[["doc_id", "docwise_perseval_proportion"]].drop_duplicates()
+
+        return round(final_doc_df['docwise_perseval_proportion'].mean(), 4), round(accuracy_df["score"].mean(), 4)
+        # take docwise mean of perseval

@@ -2,6 +2,8 @@ import csv
 import os.path
 import traceback
 
+import numpy as np
+
 
 def divide_with_exception(x, y):
     try:
@@ -58,3 +60,7 @@ def write_scores_to_csv(rows, fields=None, filename="scores.csv"):
 
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
+
+
+def custom_sigmoid(x, alpha=4.0, beta=1.0):
+    return 1 / (1 + ((10 ** alpha) * np.exp(-(10 ** beta) * x)))

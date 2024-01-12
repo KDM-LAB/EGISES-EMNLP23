@@ -152,7 +152,7 @@ class Egises:
                 break
             if document.doc_id in processed_doc_ids:
                 pbar.update(1)
-		continue
+                continue
             summary_doc_tuples = []
             summ_pair_tuples = []
             summ_user_tuples = []
@@ -336,7 +336,8 @@ class Egises:
 
         # for debug purpose
         if sample_percentage == 100 and self.debug_flag:
-            doc_user_degress_df.to_csv(f"{self.score_directory}/doc_degress_perseval_df_{self.version}.csv", index=False)
+            doc_user_degress_df.to_csv(f"{self.score_directory}/doc_degress_perseval_df_{self.version}.csv",
+                                       index=False)
 
         final_doc_df = doc_user_degress_df[["doc_id", "docwise_perseval_proportion"]].drop_duplicates()
 

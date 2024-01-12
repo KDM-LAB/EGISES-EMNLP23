@@ -15,9 +15,9 @@ def divide_with_exception(x, y):
     return 0
 
 
-def calculate_proportion(x, y):
+def calculate_minmax_proportion(x, y, epsilon=0):
     try:
-        return min(x, y) / max(x, y)
+        return (min(x, y)+epsilon) / (max(x, y)+epsilon)
     except ZeroDivisionError as err:
         # print(f"x:{x}, y:{y}")
         # print(traceback.format_exc())

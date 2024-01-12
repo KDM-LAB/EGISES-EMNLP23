@@ -1,3 +1,3 @@
-from .models import Egises, Measure, Document, Summary, PersevalParams
+from .models import Egises, Document, Summary, PersevalParams
 
-__all__ = ["Egises", "Measure", "Document", "Summary", "PersevalParams"]
+__all__ = ["Egises", "Document", "Summary", "PersevalParams"]

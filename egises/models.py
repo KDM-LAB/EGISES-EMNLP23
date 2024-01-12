@@ -11,8 +11,7 @@ from tqdm.auto import tqdm
 pd.set_option('mode.chained_assignment',
               None)  # disable warning "A value is trying to be set on a copy of a slice from a DataFrame."
 
-from egises.distance_measure import Measure, JSD, Meteor
-from egises.utils import custom_sigmoid, write_scores_to_csv, divide_with_exception, calculate_proportion
+from egises.utils import custom_sigmoid, write_scores_to_csv, divide_with_exception, calculate_minmax_proportion
 
 from dataclasses import dataclass
 
@@ -112,8 +111,9 @@ class Document:
 
 class Egises:
     def __init__(self, model_name, measure: typing.Callable, documents: Iterable[Document], score_directory="",
-                 max_workers=1, debug_flag=False):
+                 max_workers=1, debug_flag=True, version="v2"):
         self.model_name = model_name
+        self.version = version
         if not score_directory:
             self.score_directory = f"{measure.__name__}/{model_name}"
         else:
@@ -138,21 +138,21 @@ class Egises:
 
     def populate_distances(self):
         last_seen, last_doc_processed = False, None
+        processed_doc_ids = []
         if os.path.exists(self.summary_doc_score_path) and os.path.exists(self.summ_summ_score_path):
             summary_doc_score_df = pd.read_csv(self.summary_doc_score_path)
-            # find last doc_id in summary_doc_distances
-            last_doc_processed = summary_doc_score_df.iloc[-1]["doc_id"]
+            # get unique doc_ids
+            processed_doc_ids = list(summary_doc_score_df["doc_id"].unique())
         # populate document scores from where left off
         pbar = tqdm(total=3840, desc="Populating Distances")
         for document in self.documents:
             # find last doc_id in summary_doc_distances
-            if not last_seen and last_doc_processed and document.doc_id != last_doc_processed:
+            # avoid pouplating distances as hj distances already processed
+            if self.measure.__name__ == "calculate_hj":
+                break
+            if document.doc_id in processed_doc_ids:
                 pbar.update(1)
-                continue
-            elif last_doc_processed and document.doc_id == last_doc_processed:
-                pbar.update(1)
-                last_seen = True
-                continue
+		continue
             summary_doc_tuples = []
             summ_pair_tuples = []
             summ_user_tuples = []
@@ -190,8 +190,8 @@ class Egises:
 
         # calculate min/max on model_Y_df["final_score"] and user_X_score_map[(doc_id,uid1,uid2))]
         self.model_Y_df["proportion"] = self.model_Y_df.apply(
-            lambda x: calculate_proportion(x.final_score, user_X_score_map[
-                (x["doc_id"], x["uid1"], x["uid2"])]["final_score"]), axis=1)
+            lambda x: calculate_minmax_proportion(x.final_score, user_X_score_map[
+                (x["doc_id"], x["uid1"], x["uid2"])]["final_score"], epsilon=0.00001), axis=1)
 
     def get_user_model_X_scores(self, model_name):
         usum_scores_df = self.summary_doc_score_df[self.summary_doc_score_df["origin_model"] == model_name]
@@ -237,9 +237,9 @@ class Egises:
             "doc_userwise_proportional_divergence"].transform(
             lambda x: np.mean(x))
 
-        if self.debug_flag:
+        if self.debug_flag and sample_percentage == 100:
             # save model_Y_df to csv
-            model_Y_df.to_csv(f"{self.score_directory}/model_Y_df.csv", index=False)
+            model_Y_df.to_csv(f"{self.score_directory}/model_Y_df_{self.version}.csv", index=False)
 
         # temporary df to calculate docwise_mean_proportion
         final_df = model_Y_df[["doc_id", "docwise_mean_proportion"]].drop_duplicates()
@@ -300,6 +300,10 @@ class Egises:
         # calculate_degress
         model_Y_df = self.model_Y_df.sample(frac=sample_percentage / 100)
 
+        # for debug purpose
+        if sample_percentage == 100 and self.debug_flag:
+            model_Y_df.to_csv(f"{self.score_directory}/model_Y_df_perseval_df_{self.version}.csv", index=False)
+
         # find mean of model_Y_df["final_score"] grouped by doc_id,uid1
         model_Y_df["doc_userwise_proportional_divergence"] = model_Y_df.groupby(["doc_id", "uid1"])[
             "proportion"].transform(
@@ -329,8 +333,10 @@ class Egises:
         doc_user_degress_df["docwise_perseval_proportion"] = doc_user_degress_df.groupby(["doc_id"])[
             "perseval"].transform(
             lambda x: np.mean(x))
+
         # for debug purpose
-        doc_user_degress_df.to_csv(f"{self.score_directory}/doc_degress_perseval_df.csv", index=False)
+        if sample_percentage == 100 and self.debug_flag:
+            doc_user_degress_df.to_csv(f"{self.score_directory}/doc_degress_perseval_df_{self.version}.csv", index=False)
 
         final_doc_df = doc_user_degress_df[["doc_id", "docwise_perseval_proportion"]].drop_duplicates()
 

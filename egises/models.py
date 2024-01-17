@@ -136,7 +136,11 @@ class Egises:
         self.summary_doc_score_df = None
         self.summ_pair_score_df = None
 
-    def populate_distances(self):
+    def populate_distances(self, simplified_flag=False):
+        """
+        :param simplified_flag: doesnt normalize scores based on doc distances
+        :return:
+        """
         last_seen, last_doc_processed = False, None
         processed_doc_ids = []
         if os.path.exists(self.summary_doc_score_path) and os.path.exists(self.summ_summ_score_path):
@@ -189,9 +193,14 @@ class Egises:
         user_X_score_map = user_X_df.to_dict(orient="index")
 
         # calculate min/max on model_Y_df["final_score"] and user_X_score_map[(doc_id,uid1,uid2))]
-        self.model_Y_df["proportion"] = self.model_Y_df.apply(
-            lambda x: calculate_minmax_proportion(x.final_score, user_X_score_map[
-                (x["doc_id"], x["uid1"], x["uid2"])]["final_score"], epsilon=0.00001), axis=1)
+        if not simplified_flag:
+            self.model_Y_df["proportion"] = self.model_Y_df.apply(
+                lambda x: calculate_minmax_proportion(x.final_score, user_X_score_map[
+                    (x["doc_id"], x["uid1"], x["uid2"])]["final_score"], epsilon=0.00001), axis=1)
+        else: # simplified version where propotion is not weighted
+            self.model_Y_df["proportion"] = self.model_Y_df.apply(
+                lambda x: calculate_minmax_proportion(x.score, user_X_score_map[
+                    (x["doc_id"], x["uid1"], x["uid2"])]["score"], epsilon=0.00001), axis=1)
 
     def get_user_model_X_scores(self, model_name):
         usum_scores_df = self.summary_doc_score_df[self.summary_doc_score_df["origin_model"] == model_name]
@@ -218,7 +227,7 @@ class Egises:
         upair_scores_df["final_score"] = upair_scores_df.apply(
             lambda x: round(x["pair_score_weight_exp_softmax"] * x["score"], 4), axis=1)
         # keep only doc_id, uid1, uid2, final_score
-        final_df = upair_scores_df[["doc_id", "uid1", "uid2", "final_score"]]
+        final_df = upair_scores_df[["doc_id", "uid1", "uid2", "score", "final_score"]]
         return final_df
 
     def get_egises_score(self, sample_percentage=100):

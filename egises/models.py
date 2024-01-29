@@ -23,7 +23,7 @@ class PersevalParams:
     ACP_alpha: float = 4.0
     ACP_beta: float = 1.0
     EDP_alpha: float = 3.0
-    EDP_beta: float = 1.0
+    EDP_beta: float = 1.0  # used for ablation ranging from 1.0 to 2.0
     epsilon: float = 0.0000001
 
 
@@ -197,7 +197,7 @@ class Egises:
             self.model_Y_df["proportion"] = self.model_Y_df.apply(
                 lambda x: calculate_minmax_proportion(x.final_score, user_X_score_map[
                     (x["doc_id"], x["uid1"], x["uid2"])]["final_score"], epsilon=0.00001), axis=1)
-        else: # simplified version where propotion is not weighted
+        else:  # simplified version where propotion is not weighted
             self.model_Y_df["proportion"] = self.model_Y_df.apply(
                 lambda x: calculate_minmax_proportion(x.score, user_X_score_map[
                     (x["doc_id"], x["uid1"], x["uid2"])]["score"], epsilon=0.00001), axis=1)
@@ -225,7 +225,7 @@ class Egises:
             "pair_score_weight_exp"].transform(lambda x: x / sum(x))
 
         upair_scores_df["final_score"] = upair_scores_df.apply(
-            lambda x: round(x["pair_score_weight_exp_softmax"] * x["score"], 4), axis=1)
+            lambda x: x["pair_score_weight_exp_softmax"] * x["score"], axis=1)
         # keep only doc_id, uid1, uid2, final_score
         final_df = upair_scores_df[["doc_id", "uid1", "uid2", "score", "final_score"]]
         return final_df
@@ -263,7 +263,7 @@ class Egises:
         mean_msum_accuracy = np.mean(msum_accuracies)
 
         # find mean of mean_proportion column
-        return round(1 - final_df['docwise_mean_proportion'].mean(), 4), round(mean_msum_accuracy, 4)
+        return 1 - final_df['docwise_mean_proportion'].mean(), mean_msum_accuracy
 
     def calculate_edp(self, accuracy_df, perseval_params: PersevalParams) -> dict:
         # calculation of d_mean
@@ -350,5 +350,5 @@ class Egises:
 
         final_doc_df = doc_user_degress_df[["doc_id", "docwise_perseval_proportion"]].drop_duplicates()
 
-        return round(final_doc_df['docwise_perseval_proportion'].mean(), 4), round(accuracy_df["score"].mean(), 4)
+        return final_doc_df['docwise_perseval_proportion'].mean(), accuracy_df["score"].mean()
         # take docwise mean of perseval

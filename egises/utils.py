@@ -17,7 +17,7 @@ def divide_with_exception(x, y):
 
 def calculate_minmax_proportion(x, y, epsilon=0):
     try:
-        return (min(x, y)+epsilon) / (max(x, y)+epsilon)
+        return (min(x, y) + epsilon) / (max(x, y) + epsilon)
     except ZeroDivisionError as err:
         # print(f"x:{x}, y:{y}")
         # print(traceback.format_exc())
@@ -63,4 +63,10 @@ def sigmoid(x):
 
 
 def custom_sigmoid(x, alpha=4.0, beta=1.0):
-    return 1 / (1 + ((10 ** alpha) * np.exp(-(10 ** beta) * x)))
+    term1 = (1.0 + ((10 ** alpha) * np.exp(-(10 ** beta) * x)))
+    result = 1.0 / term1
+    return result
+
+if __name__ == '__main__':
+    for i in range(0, 10):
+        print(f"i={i}, custom_sigmoid={custom_sigmoid(i, alpha=3.0, beta=1.0)}")

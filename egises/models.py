@@ -282,6 +282,10 @@ class Egises:
         accuracy_df["pterm1"] = accuracy_df.apply(
             lambda x: ((x["score"] - x["d_min"]) / ((x["d_mean"] - x["d_min"]) + perseval_params.epsilon)), axis=1)
         # applied sigmoid to pterm1
+        # # calculate max min values of pterm1
+        # max_pterm1 = accuracy_df["pterm1"].max()
+        # min_pterm1 = accuracy_df["pterm1"].min()
+        # print(f"max_pterm1: {max_pterm1}, min_pterm1: {min_pterm1}, alpha={perseval_params.ACP_alpha}, beta={perseval_params.ACP_beta}")
         accuracy_df["ACP"] = accuracy_df.apply(
             lambda x: custom_sigmoid(x["pterm1"], alpha=perseval_params.ACP_alpha, beta=perseval_params.ACP_beta),
             axis=1)
@@ -289,6 +293,10 @@ class Egises:
         # calculate Accuracy Drop Penalty(ADP)
         accuracy_df["pterm2"] = accuracy_df.apply(
             lambda x: (x["d_min"] - 0) / (1 - x["d_min"] + perseval_params.epsilon), axis=1)
+        # # calculate max min values of pterm2
+        # max_pterm2 = accuracy_df["pterm2"].max()
+        # min_pterm2 = accuracy_df["pterm2"].min()
+        # print(f"max_pterm2: {max_pterm2}, min_pterm2: {min_pterm2}, alpha={perseval_params.ADP_alpha}, beta={perseval_params.ADP_beta}")
         accuracy_df["ADP"] = accuracy_df.apply(
             lambda x: custom_sigmoid(x["pterm2"], alpha=perseval_params.ADP_alpha, beta=perseval_params.ADP_beta),
             axis=1)
@@ -296,8 +304,12 @@ class Egises:
         # calculate Document Generalization Penalty(DGP)
         accuracy_df["DGP"] = accuracy_df.apply(lambda x: (x["ACP"] + x["ADP"]), axis=1)
 
+        # # calculate max min values of DGP
+        # max_DGP = accuracy_df["DGP"].max()
+        # min_DGP = accuracy_df["DGP"].min()
+        # print(f"max_DGP: {max_DGP}, min_DGP: {min_DGP}, alpha={perseval_params.EDP_alpha}, beta={perseval_params.EDP_beta}")
         accuracy_df["EDP"] = accuracy_df.apply(
-            lambda x: (1 - custom_sigmoid(x["DGP"], alpha=perseval_params.EDP_alpha, beta=perseval_params.EDP_beta)),
+            lambda x: (1 - custom_sigmoid(x["DGP"], alpha=perseval_params.EDP_alpha, beta=perseval_params.EDP_beta)) + perseval_params.epsilon,
             axis=1)
 
         doc_user_edp_dict = accuracy_df.groupby(["doc_id", "uid"]).apply(lambda x: np.mean(x["EDP"])).to_dict()

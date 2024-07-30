@@ -184,6 +184,8 @@ class Egises:
         self.summ_pair_score_df = pd.read_csv(self.summ_summ_score_path)
         self.accuracy_df = pd.read_csv(self.sum_user_score_path)
 
+        # set Nan values with 1(maximum distance) as Nan values can lead to final scores as Nan
+        self.accuracy_df = self.accuracy_df.fillna(1.0)
         # calculate X,Y scores for all document,u1,u2  pairs
         self.user_X_df = self.get_user_model_X_scores(model_name="user")
         self.model_Y_df = self.get_user_model_X_scores(model_name=self.model_name)
@@ -193,6 +195,10 @@ class Egises:
         user_X_score_map = user_X_df.to_dict(orient="index")
 
         # calculate min/max on model_Y_df["final_score"] and user_X_score_map[(doc_id,uid1,uid2))]
+
+        # consider only those rows in self.model_Y_df["proportion"] where (doc_id,uid1,uid2)] is user_X_score_map.keys
+        self.model_Y_df = self.model_Y_df[self.model_Y_df.apply(
+            lambda x: (x["doc_id"], x["uid1"], x["uid2"]) in user_X_score_map.keys(), axis=1)]
         if not simplified_flag:
             self.model_Y_df["proportion"] = self.model_Y_df.apply(
                 lambda x: calculate_minmax_proportion(x.final_score, user_X_score_map[
@@ -212,7 +218,11 @@ class Egises:
 
         # step2: get ratio of summary_summary_distance to summary_doc_distance
         # w(u_ij) = distance(ui,uj)/sum(distance(ui,doc))
-
+        # consider only those rows in upair_scores_df where (x["doc_id"], x["uid1"]) is in sum_doc_score_dict
+        upair_scores_df = upair_scores_df[upair_scores_df.apply(
+            lambda x: (x["doc_id"], x["uid1"]) in sum_doc_score_dict.keys(), axis=1
+        )]
+        # print(upair_scores_df.shape)
         upair_scores_df["pair_score_weight"] = upair_scores_df.apply(
             lambda x: divide_with_exception(x["score"], sum_doc_score_dict[(x["doc_id"], x["uid1"])]), axis=1)
 
@@ -309,7 +319,8 @@ class Egises:
         # min_DGP = accuracy_df["DGP"].min()
         # print(f"max_DGP: {max_DGP}, min_DGP: {min_DGP}, alpha={perseval_params.EDP_alpha}, beta={perseval_params.EDP_beta}")
         accuracy_df["EDP"] = accuracy_df.apply(
-            lambda x: (1 - custom_sigmoid(x["DGP"], alpha=perseval_params.EDP_alpha, beta=perseval_params.EDP_beta)) + perseval_params.epsilon,
+            lambda x: (1 - custom_sigmoid(x["DGP"], alpha=perseval_params.EDP_alpha,
+                                          beta=perseval_params.EDP_beta)) + perseval_params.epsilon,
             axis=1)
 
         doc_user_edp_dict = accuracy_df.groupby(["doc_id", "uid"]).apply(lambda x: np.mean(x["EDP"])).to_dict()

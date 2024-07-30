@@ -1,0 +1,103 @@
+{
+  "doc_id": "N24110",
+  "doc_text": "Democratic state attorney generals and environmental groups are gearing up for what is expected to be a precedent-setting legal battle with the Trump administration over its rollback of an Obama-era power plant pollution rule....",
+  "doc_summ": "High-stakes legal fight looms over Trump pollution rule",
+  "m_summary_dict": {
+    "NT1": {
+      "user": "legal battle looms over trump epa's rule change of obama's clean power plan rule",
+      "NRMS_1": "trump administration over obama era power plant rule over obama era plant rule",
+      "NRMS_2": "democratic attorney generals are up for trump administration over obama era plant pollution rule",
+      "NAML_1": "trump administration is ignoring climate change to be a precedent setting legal battle with trump",
+      "EBNR_1": "trump administration is ignoring trump administration over its rollback of power pollution rule",
+      "EBNR_2": "democratic state attorney generals are gearing up for precedent"
+    },
+    "NT3": {
+      "user": "obama's rule over stepped it's authority, but trump's rule receiving equal criticism for being to lax",
+      "NRMS_1": "trump administration over obama era power plant rule over obama era plant rule",
+      "NRMS_2": "democratic attorney generals are up for trump administration over obama era plant pollution rule",
+      "NAML_1": "trump administration is ignoring climate change to be a precedent setting legal battle with trump",
+      "EBNR_1": "trump administration is ignoring trump administration over its rollback of power pollution rule",
+      "EBNR_2": "democratic state attorney generals are gearing up for precedent"
+    },
+    "NT11": {
+      "user": "trumps epa in legal trouble",
+      "NRMS_1": "trump administration over obama era power plant rule",
+      "NRMS_2": "democratic attorney generals are up for trump administration over obama era plant pollution rule",
+      "NAML_1": "trump administration is ignoring climate change to be a precedent setting legal battle",
+      "EBNR_1": "trump administration is ignoring trump administration over its rollback of power plant pollution",
+      "EBNR_2": "democratic state attorney generals are gearing up for precedent"
+    },
+    "NT12": {
+      "user": "possible legal battle over trumps new pollution rule",
+      "NRMS_1": "trump administration over obama era power plant rule over obama era plant rule",
+      "NRMS_2": "democratic attorney generals are up for trump administration over obama era plant pollution rule",
+      "NAML_1": "trump administration expected to be precedent of climate change rule with trump rule",
+      "EBNR_1": "trump administration is ignoring trump administration over its rollback of power plant pollution",
+      "EBNR_2": "democratic state attorney generals are gearing up for precedent"
+    },
+    "NT23": {
+      "user": "trump pollution rule legal fight continues over| high stakes",
+      "NRMS_1": "trump administration over obama era power plant rule over obama era plant rule",
+      "NRMS_2": "democratic attorney generals are up for trump administration over obama era plant pollution rule",
+      "NAML_1": "trump administration is ignoring climate change to be a precedent setting legal battle",
+      "EBNR_1": "trump administration over its rollback of power plant pollution rule",
+      "EBNR_2": "democratic state attorney generals are gearing up for precedent"
+    },
+    "NT45": {
+      "user": "legal push-back over trump's attempt to limit power plant pollution regulations",
+      "NRMS_1": "trump administration over obama era power plant rule over obama era plant rule",
+      "NRMS_2": "democratic attorney generals are up for trump administration over obama era plant pollution rule",
+      "NAML_1": "trump administration expected to be precedent of climate change rule with trump rule",
+      "EBNR_1": "trump administration is ignoring trump administration over its rollback of power pollution rule",
+      "EBNR_2": "democratic state attorney generals are gearing up for precedent"
+    },
+    "NT51": {
+      "user": "epa legal battle with trump administration over power plant pollution rule ",
+      "NRMS_1": "democratic attorney generals are the clean air act in the trump administration over obama era power",
+      "NRMS_2": "democratic attorney generals are up for trump administration over obama era plant pollution rule",
+      "NAML_1": "trump administration expected to be precedent of climate change rule with trump rule",
+      "EBNR_1": "trump administration is ignoring trump administration over its rollback of power plant pollution",
+      "EBNR_2": "democratic state attorney generals are gearing up for precedent"
+    },
+    "NT64": {
+      "user": "political update",
+      "NRMS_1": "trump administration over obama era power plant rule over obama era plant rule",
+      "NRMS_2": "democratic attorney generals are up for trump administration over obama era plant pollution rule",
+      "NAML_1": "trump administration expected to be precedent of climate change rule with trump rule",
+      "EBNR_1": "trump administration is ignoring trump administration over its rollback of power pollution rule",
+      "EBNR_2": "democratic state attorney generals are gearing up for precedent"
+    },
+    "NT81": {
+      "user": " legal fight looms over trump pollution rule for high stakes ",
+      "NRMS_1": "trump administration over obama era power plant rule over obama era plant rule",
+      "NRMS_2": "democratic attorney generals are up for trump administration over obama era plant pollution rule",
+      "NAML_1": "trump administration is ignoring climate change to be a precedent setting legal battle",
+      "EBNR_1": "trump administration over its rollback of power plant pollution rule",
+      "EBNR_2": "democratic state attorney generals are gearing up for precedent"
+    },
+    "NT91": {
+      "user": "democrats trying to keep the air clean",
+      "NRMS_1": "trump administration over obama era power plant rule over obama era plant rule",
+      "NRMS_2": "democratic attorney generals are up for trump administration over obama era plant pollution rule",
+      "NAML_1": "trump administration is ignoring climate change to be a precedent setting legal battle with trump",
+      "EBNR_1": "trump administration is ignoring trump administration over its rollback of power plant pollution",
+      "EBNR_2": "democratic state attorney generals are gearing up for precedent"
+    },
+    "NT93": {
+      "user": "state attorneys and envrionmental groups gear up for court battle over epa's new rule",
+      "NRMS_1": "trump administration over obama era power plant rule",
+      "NRMS_2": "democratic attorney generals are up for trump administration over obama era plant pollution rule",
+      "NAML_1": "trump administration is ignoring climate change to be a precedent setting legal battle",
+      "EBNR_1": "trump administration is ignoring trump administration over its rollback of power plant pollution",
+      "EBNR_2": "democratic state attorney generals are gearing up for precedent"
+    },
+    "NT100": {
+      "user": "unprecedent legal battle to await over trump's pollution rule backlash",
+      "NRMS_1": "trump administration over obama era power plant rule over obama era plant rule",
+      "NRMS_2": "democratic attorney generals are up for trump administration over obama era plant pollution rule",
+      "NAML_1": "trump administration is ignoring climate change to be a precedent setting legal battle with trump",
+      "EBNR_1": "trump administration is ignoring trump administration over its rollback of power plant pollution",
+      "EBNR_2": "democratic state attorney generals are gearing up for precedent"
+    }
+  }
+}

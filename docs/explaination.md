@@ -61,13 +61,11 @@ _charecterized by (doc_id, origin_model, u1) where origin_model="model_name"_
 - sum_sum_doc_distances.csv (doc_id,origin_model,uid1,uid2,score)
 - sum_user_distances.csv (doc_id,origin_model,uid,score)
  
+```python
+
+```
 Once you have these files for a (measure, model), you can easily calculate the personalization scores(accuracy, egises, perseval)
 
-#### Egises
-
-#### Accuracy
-
-#### Perseval
-
+Refer [evaluation_script.py](https://github.com/KDM-LAB/Evaluation-Framework-for-Personalized-Summarization/blob/main/EGISES_subjectivity/evaluation_script.py) for usage
 
 
